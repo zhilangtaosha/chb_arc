@@ -34,7 +34,7 @@ def get_featurs(model, test_list):
 
     pbar = tqdm(total=len(test_list))
     dataset = TestSet(test_list=test_list)
-    testloader = data.DataLoader(dataset, batch_size=300)
+    testloader = data.DataLoader(dataset, batch_size=args.batch_size)
     with torch.no_grad():
         for idx,imgs in enumerate(testloader):
             pbar.update(imgs.shape[0])
@@ -83,18 +83,23 @@ def get_feature_dict(test_list, features):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='test for ccf dataset')
     parser.add_argument("--csv",default="/data2/hbchen/ccf/submission_template.csv", help="address for the test csv")
+    parser.add_argument("--tocsv",default="./results/submission_ccf.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
+    parser.add_argument("--ckpt",default="ir_se50.pth", help="model checkpoints")
+    parser.add_argument("--save_mat",default='./results/face_embedding_new.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
+    parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
     args = parser.parse_args()
 
     conf = get_config(False)
     ##############################
     learner = face_learner(conf, True)
-    learner.load_state(conf, '2019-10-05-06-41_accuracy:0.8021428571428573_step:57080_final.pth', True, True)#'final.pth'
+    learner.load_state(conf, args.ckpt, True, True)#'final.pth'
     learner.model = learner.model.to(conf.device)
     learner.model.eval()
-    print('learner loaded')
 
+    print('learner loaded')
+    ###############################
     data_dir = args.testdir                     # testset dir
     name_list = [name for name in os.listdir(data_dir)]
     img_paths = [data_dir + name for name in os.listdir(data_dir)]
@@ -107,13 +112,13 @@ if __name__ == '__main__':
 
     fe_dict = get_feature_dict(name_list, features)
     print('Output number:', len(fe_dict))
-    sio.savemat('face_embedding_test_ccf.mat', fe_dict)
-    ################################
-    face_features = sio.loadmat('face_embedding_test.mat')
-    face_features_ccf = sio.loadmat('face_embedding_test_ccf.mat')
+    sio.savemat(args.save_mat, fe_dict)
+    ##################################
+    face_features = sio.loadmat(args.save_mat)
+    #face_features_ccf = sio.loadmat('face_embedding_test_ccf.mat')
     print('Loaded mat')
     sample_sub = open(args.csv, 'r')  # sample submission file dir
-    sub = open('submission_ccf_con.csv', 'w')
+    sub = open(args.tocsv, 'w')
     print('Loaded CSV')
     lines = sample_sub.readlines()
     pbar = tqdm(total=len(lines))
@@ -121,11 +126,11 @@ if __name__ == '__main__':
         pair = line.split(',')[0]
         sub.write(pair + ',')
         a, b = pair.split(':')
-        x1 = np.concatenate((face_features[a][0],face_features_ccf[a][0]))
-        x2 = np.concatenate((face_features[b][0],face_features_ccf[b][0]))
+        #x1 = np.concatenate((face_features[a][0],face_features_ccf[a][0]))
+        #x2 = np.concatenate((face_features[b][0],face_features_ccf[b][0]))
         # score = '%.5f' % (0.5 + 0.5 * (cosin_metric(face_features[a][0], face_features[b][0])))
-        score = '%.5f' % cosin_metric(x1,x2)
-        # score = '%5.f' % cosine_similarity(face_features[a][0], face_features[b][0])
+        #score = '%.5f' % cosin_metric(x1,x2)
+        score = '%.2f' % cosin_metric(face_features[a][0], face_features[b][0])
         sub.write(score + '\n')
         pbar.update(1)
 
