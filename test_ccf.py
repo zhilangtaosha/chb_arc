@@ -83,10 +83,10 @@ def get_feature_dict(test_list, features):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='test for ccf dataset')
     parser.add_argument("--csv",default="/data2/hbchen/ccf/submission_template.csv", help="address for the test csv")
-    parser.add_argument("--tocsv",default="./results/submission_ccf.csv", help="csv result")
+    parser.add_argument("--tocsv",default="./results/submission_resnet101.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
-    parser.add_argument("--ckpt",default="ir_se50.pth", help="model checkpoints")
-    parser.add_argument("--save_mat",default='./results/face_embedding_new.mat', help="feature_mat")
+    parser.add_argument("--ckpt",default="resnet101.pth", help="model checkpoints")
+    parser.add_argument("--save_mat",default='./results/face_embedding_resnet101.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
     parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
     args = parser.parse_args()
