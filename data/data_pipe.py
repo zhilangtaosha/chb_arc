@@ -1,5 +1,5 @@
 from pathlib import Path
-from torch.utils.data import Dataset, ConcatDataset, DataLoader
+from torch.utils.data import Dataset, ConcatDataset, DataLoader,WeightedRandomSampler
 from torchvision import transforms as trans
 from torchvision.datasets import ImageFolder
 from PIL import Image, ImageFile
@@ -89,9 +89,14 @@ def get_train_loader(conf):
         ds, class_num = get_train_dataset(conf.ccf_folder/'African')
     elif conf.data_mode == 'Caucasian':
         ds, class_num = get_train_dataset(conf.ccf_folder/'Caucasian')
+    elif conf.data_mode == 'Asian':
+        ds, class_num = get_train_dataset(conf.ccf_folder/'Asian')
+    elif conf.data_mode == 'Indian':
+        ds, class_num = get_train_dataset(conf.ccf_folder/'Indian')
     elif conf.data_mode =='ccf':
         ds = []
         class_num = []
+        imgs_num = []
         for path in conf.ccf_folder.iterdir():
             if path.is_file():
                 continue
@@ -99,6 +104,7 @@ def get_train_loader(conf):
                 ds_tmp, class_num_tmp = get_train_dataset(path)
                 ds.append(ds_tmp)
                 class_num.append(class_num_tmp)
+                imgs_num.append(len(ds_tmp))
         for j,sub_ds in enumerate(ds):
             for i,(url,label) in enumerate(sub_ds.imgs):
                 if j>0:
@@ -108,7 +114,17 @@ def get_train_loader(conf):
         # class_num = ds.class_num()
     print('##################################')
     print(conf.batch_size)
-    loader = DataLoader(ds, batch_size=conf.batch_size, shuffle=True, pin_memory=conf.pin_memory, num_workers=conf.num_workers)
+    
+    weights = []
+    for i in range(4):
+        weights+=[sum(class_num)//class_num[i] for j in range(imgs_num[i])]
+    print(len(ds))
+    print(len(weights))
+    assert len(ds) ==len(weights)
+    weights = torch.FloatTensor(weights)
+    
+    train_sampler = WeightedRandomSampler(weights,len(ds),replacement=True)
+    loader = DataLoader(ds, batch_size=conf.batch_size, sampler = train_sampler, pin_memory=conf.pin_memory, num_workers=conf.num_workers)
     if isinstance(class_num,list):
         class_num = sum(class_num)
     return loader, class_num 
