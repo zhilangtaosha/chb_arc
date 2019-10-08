@@ -59,6 +59,7 @@ def get_config(training = True):
                 'Asian':0.25
             }
             conf.ce_loss = RankLossWrapper(conf)
+            conf.multitask_mode = 'rece' # [race, id]
 
 #--------------------Inference Config ------------------------
     else:

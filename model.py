@@ -356,7 +356,7 @@ class RankLossWrapper(Module):
         if self.ce_loss == None:
             loss = rank_loss
         else:
-            loss = self.rank_weight * rank_loss + (1 - self.rank_loss) * ce_loss
+            loss = self.rank_weight * rank_loss + (1 - self.rank_weight) * ce_loss
         return loss
 
         
@@ -405,7 +405,7 @@ class RankHead(Module):
 
         self.race_net = Arcface(
             embedding_size=conf.embedding_size, 
-            classnum=4
+            classnum=conf.class_num if conf.multitask_mode == 'id' else 4
             ) if conf.rank_multitask else None
     
         self.neg_num = conf.rank_neg_num

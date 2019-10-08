@@ -295,6 +295,9 @@ class PairPoolDataset(Dataset):
             weight = np.array(self.sampling_weight[1])
             weight = weight / np.sum(weight)
             self.sampling_weight[1] = weight.tolist()
+
+        # Multitask setting
+        self.return_label_mode = conf.multitask_mode
     
     def __len__(self):
         return len(self.dataset)
@@ -329,6 +332,12 @@ class PairPoolDataset(Dataset):
             sample, target = self.dataset[idx]
             pair_sample.append(sample)
             pair_target.append(target)
+        
+        if self.return_label_mode == 'race':
+            pair_target = list(map(
+                lambda x: self.sampling_weight[0].index(self.label_to_race(x)),
+                pair_target
+                ))
 
         pair_sample = torch.stack(pair_sample, dim=0)
         pair_target = torch.tensor(pair_target, dtype=torch.long)

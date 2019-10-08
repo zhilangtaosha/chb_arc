@@ -40,7 +40,7 @@ class face_learner(object):
         if not inference:
             self.milestones = conf.milestones
             self.loader, self.class_num = get_train_loader(conf)        
-
+            conf.class_num = self.class_num
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
             if conf.data_mode == 'pair_wise':
