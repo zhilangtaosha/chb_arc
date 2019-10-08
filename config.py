@@ -7,7 +7,7 @@ from torchvision import transforms as trans
 def get_config(training = True):
     conf = edict()
     conf.data_path = Path('/data2/hbchen/ccf/training')#address of the dataset
-    conf.work_path = Path('work_space_African')
+    conf.work_path = Path('work_space')
     conf.model_path = conf.work_path/'models'#temp models
     conf.log_path = conf.work_path/'log_chb'
     conf.save_path = conf.work_path/'final_model'#final models
@@ -40,7 +40,7 @@ def get_config(training = True):
         conf.lr = 1e-3
         conf.milestones = [12,15,18]
         conf.momentum = 0.9
-        conf.pin_memory = True
+        conf.pin_memory = False
 #         conf.num_workers = 4 # when batchsize is 200
         conf.num_workers = 3
         conf.ce_loss = CrossEntropyLoss()    
