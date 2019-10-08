@@ -32,9 +32,10 @@ class face_learner(object):
                     conf,
                     Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
                 ).to(conf.device)
+                print('rank {}_{} model generated'.format(conf.net_mode, conf.net_depth))
             else:
                 self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
-            print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+                print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
         
         if not inference:
             self.milestones = conf.milestones
@@ -44,10 +45,10 @@ class face_learner(object):
             self.step = 0
             if conf.data_mode == 'pair_wise':
                 self.head = RankHead(conf).to(conf.device)
+                print('rank model heads generated')
             else:
                 self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
-
-            print('two model heads generated')
+                print('two model heads generated')
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model)
             
@@ -55,6 +56,19 @@ class face_learner(object):
                 self.optimizer = optim.SGD([
                                     {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
                                     {'params': [paras_wo_bn[-1]] + [self.head.kernel], 'weight_decay': 4e-4},
+                                    {'params': paras_only_bn}
+                                ], lr = conf.lr, momentum = conf.momentum)
+            elif conf.data_mode == 'pair_wise':
+                if conf.rank_multitask:
+                    self.optimizer = optim.SGD([
+                                    {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
+                                    {'params': [paras_wo_bn[-1]] + [self.head.race_net.kernel], 'weight_decay': 4e-4},
+                                    {'params': paras_only_bn}
+                                ], lr = conf.lr, momentum = conf.momentum)
+                else:
+                    self.optimizer = optim.SGD([
+                                    {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
+                                    {'params': [paras_wo_bn[-1]], 'weight_decay': 4e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             else:
@@ -98,7 +112,7 @@ class face_learner(object):
             save_path = conf.save_path
         else:
             save_path = conf.model_path            
-        self.model.load_state_dict(torch.load(save_path/'model_{}'.format(fixed_str)),strict=False)
+        self.model.load_state_dict(torch.load(save_path/'model_{}'.format(fixed_str)), strict=False)
         if not model_only:
             self.head.load_state_dict(torch.load(save_path/'head_{}'.format(fixed_str)))
             self.optimizer.load_state_dict(torch.load(save_path/'optimizer_{}'.format(fixed_str)))

@@ -8,9 +8,9 @@ from model import RankLossWrapper
 def get_config(training = True):
     conf = edict()
     conf.data_path = Path('/data2/hbchen/ccf/training')#address of the dataset
-    conf.work_path = Path('work_space')
+    conf.work_path = Path('work_space_pairwise')
     conf.model_path = conf.work_path/'models'#temp models
-    conf.log_path = conf.work_path/'log_chb'
+    conf.log_path = conf.work_path/'log'
     conf.save_path = conf.work_path/'final_model'#final models
     conf.input_size = [112,112]
     conf.embedding_size = 512

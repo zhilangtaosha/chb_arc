@@ -307,7 +307,7 @@ class Am_softmax(Module):
 
 
 ##################################  Pair-wise Ranking #############################################################    
-class RankLoss(nn.Module):
+class RankLoss(Module):
     def __init__(self, margin, mode='sum'):
         super(RankLoss, self).__init__()
         assert mode in ('sum', 'mean', None)
@@ -325,7 +325,7 @@ class RankLoss(nn.Module):
         return loss
 
 
-class RankLossWrapper(nn.Module):
+class RankLossWrapper(Module):
     '''
     A RankLossWrapper for compatibility.
     '''
@@ -360,14 +360,12 @@ class RankLossWrapper(nn.Module):
         return loss
 
         
-class RankWrapper(nn.Module):
+class RankWrapper(Module):
     def __init__(self, conf, backbone):
         '''
         A RankWrapper for backbone.
         '''
-        super(RankBase, self).__init__()
-        self.opt = opt
-        self.drop_prob_lm = opt.drop_prob_lm
+        super(RankWrapper, self).__init__()
         self.backbone = backbone
         self.neg_num = conf.rank_neg_num
         self.pos_num = conf.rank_pos_num
@@ -393,9 +391,12 @@ class RankWrapper(nn.Module):
         else:
             feature = self.backbone(img)
             return feature
+    
+    def load_state_dict(self, *args, **kwargs):
+        self.backbone.load_state_dict(*args, **kwargs)
 
 
-class RankHead(nn.Module):
+class RankHead(Module):
     def __init__(self, conf):
         super(RankHead, self).__init__()
 

@@ -13,6 +13,7 @@ import mxnet as mx
 from tqdm import tqdm
 from collections import defaultdict, OrderedDict
 import random
+import bisect
 
 def de_preprocess(tensor):
     return tensor*0.5 + 0.5
@@ -242,15 +243,25 @@ def get_pair_ranking_dataset(conf, dataset_folder):
                 new_label = label
             label_to_race[new_label] = ds_key
 
-    ds = ConcatDataset(ds)
+    sub_ds = [z[1] for z in ds.items()]
+    ds = ExtendConcatDataset(sub_ds)
     
     # for pair sampling
     label_to_pos_indexs = defaultdict(set) # a set containing all positive img index
     race_to_index = defaultdict(set)
-    for idx, (img_path, label) in enumerate(ds.img):
+    len_of_concat = len(ds)
+    for idx in tqdm(range(len_of_concat)):
+        img, label = ds.get_img_info(idx)
+    # for idx, (img_path, label) in enumerate(ds.img):
         label_to_pos_indexs[label].add(idx)
         race = label_to_race[label]
         race_to_index[race].add(idx)
+
+    # checkpoint
+    rand_img = random.randint(0, len_of_concat - 1)
+    img, label = ds.get_img_info(rand_img)
+    race = label_to_race[label]
+    print('img: {}, race: {}, pos num: {}'.format(img, race, len(label_to_pos_indexs[label])))
 
     map_dict = {
         'label2posidx': label_to_pos_indexs,
@@ -284,21 +295,25 @@ class PairPoolDataset(Dataset):
             weight = np.array(self.sampling_weight[1])
             weight = weight / np.sum(weight)
             self.sampling_weight[1] = weight.tolist()
+    
+    def __len__(self):
+        return len(self.dataset)
 
     def __getitem__(self, index):
         sample, target = self.dataset[index]
+        # print(sample.shape, target)
 
-        label = target.item()
+        label = target
         pos_idx_set = self.label_to_pos_idx[label]
         
         if self.race_weight is None:
-            pos_pool = pos_idx_set - set(index)
+            pos_pool = pos_idx_set - set([index])
             neg_pool = self.pool_set - pos_idx_set
 
             pos_index = random.choices(list(pos_pool), k=self.pos_num)
             neg_index = random.choices(list(neg_pool), k=self.neg_num)
         else:
-            pos_pool = pos_idx_set - set(index)
+            pos_pool = pos_idx_set - set([index])
             neg_pool_num = np.random.multinomial(self.neg_num, self.sampling_weight[1]).tolist()
 
             pos_index = random.choices(list(pos_pool), k=self.pos_num)
@@ -316,6 +331,20 @@ class PairPoolDataset(Dataset):
             pair_target.append(target)
 
         pair_sample = torch.stack(pair_sample, dim=0)
-        pair_target = torch.cat(pair_target)
+        pair_target = torch.tensor(pair_target, dtype=torch.long)
 
         return pair_sample, pair_target
+
+
+class ExtendConcatDataset(ConcatDataset):
+    def get_img_info(self, idx):
+        if idx < 0:
+            if -idx > len(self):
+                raise ValueError("absolute value of index should not exceed dataset length")
+            idx = len(self) + idx
+        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
+        if dataset_idx == 0:
+            sample_idx = idx
+        else:
+            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
+        return self.datasets[dataset_idx].imgs[sample_idx]
