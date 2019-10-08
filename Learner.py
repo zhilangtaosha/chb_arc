@@ -13,6 +13,12 @@ from PIL import Image
 from torchvision import transforms as trans
 import math
 import bcolz
+from models_new import resnet18, resnet34, resnet50, resnet101
+
+def requires_grad(model, flag=True):
+    for p in model.parameters():
+        p.requires_grad = flag
+
 
 class face_learner(object):
     def __init__(self, conf, inference=False):
@@ -21,8 +27,11 @@ class face_learner(object):
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
-            print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+            #self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
+            #print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+            self.model = resnet101()
+            print('model generated')
+            
         
         if not inference:
             self.milestones = conf.milestones
@@ -53,15 +62,13 @@ class face_learner(object):
             print('optimizers generated')    
             print('len of loader:',len(self.loader)) 
             self.board_loss_every = len(self.loader)//min(len(self.loader),100)
-            self.evaluate_every = len(self.loader)//10
-            self.save_every = len(self.loader)//5
+            self.evaluate_every = len(self.loader)//1
+            self.save_every = len(self.loader)//1
             self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(conf.val_folder)
         else:
             self.threshold = conf.threshold
     
-    def requires_grad(self, flag=True):
-        for p in self.model.parameters():
-            p.requires_grad = flag
+
 
 
     def save_state(self, conf, accuracy, to_save_folder=False, extra=None, model_only=False):
@@ -89,7 +96,7 @@ class face_learner(object):
         if not model_only:
             self.head.load_state_dict(torch.load(save_path/'head_{}'.format(fixed_str)))
             self.optimizer.load_state_dict(torch.load(save_path/'optimizer_{}'.format(fixed_str)))
-        
+
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
         self.writer.add_scalar('{}_accuracy'.format(db_name), accuracy, self.step)
         self.writer.add_scalar('{}_best_threshold'.format(db_name), best_threshold, self.step)
@@ -190,12 +197,12 @@ class face_learner(object):
     def train(self, conf, epochs):
         self.model = self.model.to(conf.device)
         self.model.train()
-        running_loss = 0.            
+        running_loss = 0.      
+        requires_grad(self.head,True)
+        requires_grad(self.model,True)      
         for e in range(epochs):
             print('epoch {} started'.format(e))
-            self.requires_grad(True)
-            if e <3:
-                self.requires_grad(False)
+            
             if e == self.milestones[0]:
                 self.schedule_lr()
             if e == self.milestones[1]:
@@ -219,6 +226,7 @@ class face_learner(object):
                     running_loss = 0.
                 
                 if self.step % self.evaluate_every == 0 and self.step != 0:
+                    accuracy=None
                     accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.agedb_30, self.agedb_30_issame)
                     self.board_val('agedb_30', accuracy, best_threshold, roc_curve_tensor)
                     accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.lfw, self.lfw_issame)
@@ -226,9 +234,10 @@ class face_learner(object):
                     accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.cfp_fp, self.cfp_fp_issame)
                     self.board_val('cfp_fp', accuracy, best_threshold, roc_curve_tensor)
                     self.model.train()
+                    
                 if self.step % self.save_every == 0 and self.step != 0:
-                    pass
-                    #self.save_state(conf, accuracy)
+                    
+                    self.save_state(conf, accuracy)
                 self.step += 1
                 
         self.save_state(conf, accuracy, to_save_folder=True, extra='final')
