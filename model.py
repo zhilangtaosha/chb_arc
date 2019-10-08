@@ -395,6 +395,9 @@ class RankWrapper(Module):
     def load_state_dict(self, *args, **kwargs):
         self.backbone.load_state_dict(*args, **kwargs)
 
+    def state_dict(self, *args, **kwargs):
+        return self.backbone.state_dict(*args, **kwargs)
+
 
 class RankHead(Module):
     def __init__(self, conf):

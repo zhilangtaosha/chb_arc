@@ -51,7 +51,7 @@ def get_config(training = True):
             conf.rank_margin = 0.5
             conf.rank_loss_weight = 1
             conf.rank_pos_num = 1
-            conf.rank_neg_num = 18
+            conf.rank_neg_num = 8
             conf.race_neg_sampling_weight = {
                 'Indian': 0.3,
                 'African': 0.3,
