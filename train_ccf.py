@@ -1,7 +1,7 @@
 from config import get_config
 from Learner import face_learner
 import argparse
-
+import torch
 # python train.py -net mobilefacenet -b 200 -w 4
 
 if __name__ == '__main__':
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr','--lr',help='learning rate',default=1e-3, type=float)
     parser.add_argument("-b", "--batch_size", help="batch_size", default=100, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=3, type=int)
-    parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf,African,Caucasian]",default='African', type=str)
+    parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf,African,Caucasian,Indian,Asian]",default='ccf', type=str)
     args = parser.parse_args()
 
     conf = get_config()
@@ -29,4 +29,6 @@ if __name__ == '__main__':
     conf.data_mode = args.data_mode
     learner = face_learner(conf)
     learner.load_state(conf, 'ir_se50.pth', True, True)
+    learner.head.load_state_dict(torch.load('./work_space/final_model/head_2019-10-07-15-40_accuracy:0.9282857142857143_step:57080_final.pth'))
+    learner.schedule_lr()
     learner.train(conf, args.epochs)
