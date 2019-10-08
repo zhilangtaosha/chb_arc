@@ -1,6 +1,8 @@
 from config import get_config
 from Learner import face_learner
 import argparse
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 import torch
 # python train.py -net mobilefacenet -b 200 -w 4
 
@@ -28,7 +30,7 @@ if __name__ == '__main__':
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
     learner = face_learner(conf)
-    learner.load_state(conf, 'ir_se50.pth', True, True)
-    learner.head.load_state_dict(torch.load('./work_space/final_model/head_2019-10-07-15-40_accuracy:0.9282857142857143_step:57080_final.pth'))
-    learner.schedule_lr()
+    learner.load_state(conf, 'resnet101.pth', True, True)
+    #learner.head.load_state_dict(torch.load('./work_space/final_model/head_2019-10-07-15-40_accuracy:0.9282857142857143_step:57080_final.pth'))
+    #learner.schedule_lr()
     learner.train(conf, args.epochs)
