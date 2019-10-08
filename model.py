@@ -4,6 +4,7 @@ import torch
 from collections import namedtuple
 import math
 import pdb
+import random
 
 ##################################  Original Arcface Model #############################################################
 
@@ -304,3 +305,138 @@ class Am_softmax(Module):
         output *= self.s # scale up in order to make softmax work, first introduced in normface
         return output
 
+
+##################################  Pair-wise Ranking #############################################################    
+class RankLoss(nn.Module):
+    def __init__(self, margin, mode='sum'):
+        super(RankLoss, self).__init__()
+        assert mode in ('sum', 'mean', None)
+        self.margin = margin
+        self.mode = mode
+
+    def forward(self, pos, neg, thresh):
+        loss = torch.max(self.margin - (pos - neg), thresh)
+        loss = torch.sum(loss, dim=-1)
+
+        if self.mode == 'sum':
+            loss = torch.sum(loss)
+        elif self.mode == 'mean':
+            loss = torch.mean(loss)
+        return loss
+
+
+class RankLossWrapper(nn.Module):
+    '''
+    A RankLossWrapper for compatibility.
+    '''
+    def __init__(self, conf):
+        super(RankLossWrapper, self).__init__()
+        
+        self.ce_loss = None
+        if conf.rank_multitask:
+            from torch.nn import CrossEntropyLoss
+            self.ce_loss = CrossEntropyLoss()
+
+        self.rank_loss = RankLoss(conf.rank_margin, mode='mean')
+        self.thresh = torch.tensor(0.0).to(conf.device)
+        
+        self.rank_weight = conf.rank_loss_weight
+        self.neg_num = conf.rank_neg_num
+        self.pos_num = conf.rank_pos_num
+    
+    def forward(self, collection, label):
+        (pos, neg), thetas = collection
+
+        pos_idx = random.randint(0, self.pos_num - 1)
+        pos = pos[:, pos_idx:pos_idx + 1] # -> [batch, 1], only sample one pos to compute ranking loss
+        rank_loss = self.rank_loss(pos, neg, self.thresh)
+
+        ce_loss = self.ce_loss(thetas, label) if thetas is not None else 0.0
+
+        if self.ce_loss == None:
+            loss = rank_loss
+        else:
+            loss = self.rank_weight * rank_loss + (1 - self.rank_loss) * ce_loss
+        return loss
+
+        
+class RankWrapper(nn.Module):
+    def __init__(self, conf, backbone):
+        '''
+        A RankWrapper for backbone.
+        '''
+        super(RankBase, self).__init__()
+        self.opt = opt
+        self.drop_prob_lm = opt.drop_prob_lm
+        self.backbone = backbone
+        self.neg_num = conf.rank_neg_num
+        self.pos_num = conf.rank_pos_num
+        self.sample_num = self.pos_num + self.neg_num
+    
+    def forward(self, img):
+        if self.training:
+            '''
+            In order to be compatible with the Learner api, the ranking input tensor img has the size
+            of [batch, sample_num + 1, channel, W, H]
+            '''
+            batch, num, *img_size = img.size()
+            assert num == self.sample_num + 1
+            
+            img = img.view(-1, *img_size)
+            feature = self.backbone(img)
+            
+            feature = feature.view(batch, num, -1)
+            gt = feature[:, 0:1]
+            pos = feature[:, 1:self.pos_num+1]
+            neg = feature[:, self.pos_num+1:]
+            return gt, pos, neg, feature
+        else:
+            feature = self.backbone(img)
+            return feature
+
+
+class RankHead(nn.Module):
+    def __init__(self, conf):
+        super(RankHead, self).__init__()
+
+        self.race_net = Arcface(
+            embedding_size=conf.embedding_size, 
+            classnum=4
+            ) if conf.rank_multitask else None
+    
+        self.neg_num = conf.rank_neg_num
+        self.pos_num = conf.rank_pos_num
+        self.sample_num = self.pos_num + self.neg_num
+        
+    def forward(self, embedding, label):
+        '''
+        Get the related score for different combinations.
+        gt: the true embedding of true people
+        pos: the other picture embedding of true people
+        neg: the sampled img embedding from other people
+        feature: the combined tensor without slicing
+        
+        All the input tensor have the same size of [batch, num, feature_size]
+        '''
+        gt, pos, neg, feature = embedding
+
+        pos_score = self.cosine(gt, pos)
+        neg_score = self.cosine(gt, neg)
+
+        thetas = None
+        if self.race_net is not None:
+            feature_in = feature.view(-1, feature.size(-1))
+            thetas = self.race_net(feature_in, lebel)
+
+        return (pos_score, neg_score), thetas
+
+    def cosine(self, input, other):
+        norm_input = torch.sqrt(torch.sum(torch.mul(input, input), dim=-1))
+        norm_other = torch.sqrt(torch.sum(torch.mul(other, other), dim=-1)) # -> [batch, num]
+
+        inner = torch.sum(torch.mul(input, other), dim=-1) # -> [batch, num]
+        score = torch.div(
+            inner, 
+            torch.mul(norm_input, norm_other) + 1e-8
+            ) # add 1e-8 for numerical stable
+        return score

@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument("--tocsv",default="./results/submission_ccf.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
     parser.add_argument("--ckpt",default="ir_se50.pth", help="model checkpoints")
-    parser.add_argument("--save_mat",default='./results/face_embedding_new.mat', help="feature_mat")
+    parser.add_argument("--save_mat",default='./results/face_embedding_ori.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
     parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
     args = parser.parse_args()

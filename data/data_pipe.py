@@ -11,6 +11,8 @@ import pickle
 import torch
 import mxnet as mx
 from tqdm import tqdm
+from collections import defaultdict, OrderedDict
+import random
 
 def de_preprocess(tensor):
     return tensor*0.5 + 0.5
@@ -105,27 +107,37 @@ def get_train_loader(conf):
                 ds.append(ds_tmp)
                 class_num.append(class_num_tmp)
                 imgs_num.append(len(ds_tmp))
-        for j,sub_ds in enumerate(ds):
-            for i,(url,label) in enumerate(sub_ds.imgs):
+        for j, sub_ds in enumerate(ds):
+            for i, (url, label) in enumerate(sub_ds.imgs):
                 if j>0:
                     sub_ds.imgs[i] = (url, label + sum(class_num[:j]))
         ds = ConcatDataset(ds)
         # ds = ccf_test_dataset(conf.ccf_folder)
         # class_num = ds.class_num()
+    elif conf.data_mode == 'pair_wise':
+        ds, class_num, imgs_num = get_pair_ranking_dataset(conf, conf.ccf_folder)
+    
     print('##################################')
     print(conf.batch_size)
     
     weights = []
     for i in range(4):
-        weights+=[sum(class_num)//class_num[i] for j in range(imgs_num[i])]
+        weights += [sum(class_num)//class_num[i] for j in range(imgs_num[i])]
     print(len(ds))
     print(len(weights))
-    assert len(ds) ==len(weights)
+    assert len(ds) == len(weights)
     weights = torch.FloatTensor(weights)
     
-    train_sampler = WeightedRandomSampler(weights,len(ds),replacement=True)
-    loader = DataLoader(ds, batch_size=conf.batch_size, sampler = train_sampler, pin_memory=conf.pin_memory, num_workers=conf.num_workers)
-    if isinstance(class_num,list):
+    train_sampler = WeightedRandomSampler(weights, len(ds), replacement=True)
+    loader = DataLoader(
+        ds, 
+        batch_size=conf.batch_size, 
+        sampler = train_sampler, 
+        pin_memory=conf.pin_memory, 
+        num_workers=conf.num_workers
+        )
+
+    if isinstance(class_num, list):
         class_num = sum(class_num)
     return loader, class_num 
     
@@ -202,3 +214,108 @@ def load_mx_rec(rec_path):
 #             img = de_preprocess(img)
 #             img = self.transform(img)
 #         return img, label
+
+
+def get_pair_ranking_dataset(conf, dataset_folder):
+    # for pair sampling
+    ds = OrderedDict()
+    class_num = []
+    imgs_num = []
+
+    for path in dataset_folder.iterdir():
+        if path.is_file():
+            continue
+        else:
+            ds_tmp, class_num_tmp = get_train_dataset(path)
+            race_name = path.name
+            ds[race_name] = ds_tmp
+            class_num.append(class_num_tmp)
+            imgs_num.append(len(ds_tmp))
+
+    label_to_race = {} 
+    for j, ds_key in enumerate(ds):
+        for i, (url, label) in enumerate(ds[ds_key].imgs):
+            if j > 0:
+                new_label = label + sum(class_num[:j])
+                ds[ds_key].imgs[i] = (url, new_label)
+            else:
+                new_label = label
+            label_to_race[new_label] = ds_key
+
+    ds = ConcatDataset(ds)
+    
+    # for pair sampling
+    label_to_pos_indexs = defaultdict(set) # a set containing all positive img index
+    race_to_index = defaultdict(set)
+    for idx, (img_path, label) in enumerate(ds.img):
+        label_to_pos_indexs[label].add(idx)
+        race = label_to_race[label]
+        race_to_index[race].add(idx)
+
+    map_dict = {
+        'label2posidx': label_to_pos_indexs,
+        'race2idx': race_to_index,
+        'label2race': label_to_race
+    }
+    
+    return PairPoolDataset(conf, ds, map_dict), class_num, imgs_num
+
+
+class PairPoolDataset(Dataset):
+    def __init__(self, conf, sequential_dataset, map_dict):
+        self.dataset = sequential_dataset
+
+        self.label_to_pos_idx = map_dict['label2posidx']
+        self.label_to_race = map_dict['label2race']
+        self.race_to_idx = map_dict['race2idx']
+        self.pool_set = set(range(len(self.dataset)))
+
+        self.pos_num = conf.rank_pos_num
+        self.neg_num = conf.rank_neg_num
+        self.race_weight = conf.race_neg_sampling_weight
+        self.sampling_weight = None
+        if self.race_weight is not None:
+            self.sampling_weight = [[], []]
+            for k, v in self.race_weight.items():
+                self.sampling_weight[0].append(k)
+                self.sampling_weight[1].append(v)
+            
+            # auto normalization
+            weight = np.array(self.sampling_weight[1])
+            weight = weight / np.sum(weight)
+            self.sampling_weight[1] = weight.tolist()
+
+    def __getitem__(self, index):
+        sample, target = self.dataset[index]
+
+        label = target.item()
+        pos_idx_set = self.label_to_pos_idx[label]
+        
+        if self.race_weight is None:
+            pos_pool = pos_idx_set - set(index)
+            neg_pool = self.pool_set - pos_idx_set
+
+            pos_index = random.choices(list(pos_pool), k=self.pos_num)
+            neg_index = random.choices(list(neg_pool), k=self.neg_num)
+        else:
+            pos_pool = pos_idx_set - set(index)
+            neg_pool_num = np.random.multinomial(self.neg_num, self.sampling_weight[1]).tolist()
+
+            pos_index = random.choices(list(pos_pool), k=self.pos_num)
+            neg_index = []
+            for k, num in zip(self.sampling_weight[0], neg_pool_num):
+                neg_pool = self.race_to_idx[k] - pos_idx_set
+                neg_index.extend(random.choices(list(neg_pool), k=num))
+        
+        pair_sample = [sample]
+        pair_target = [target]
+        extend_index = pos_index + neg_index
+        for idx in extend_index:
+            sample, target = self.dataset[idx]
+            pair_sample.append(sample)
+            pair_target.append(target)
+
+        pair_sample = torch.stack(pair_sample, dim=0)
+        pair_target = torch.cat(pair_target)
+
+        return pair_sample, pair_target

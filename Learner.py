@@ -1,5 +1,5 @@
 from data.data_pipe import de_preprocess, get_train_loader, get_val_data
-from model import Backbone, Arcface, MobileFaceNet, Am_softmax, l2_norm
+from model import Backbone, Arcface, MobileFaceNet, Am_softmax, l2_norm, RankHead, RankWrapper
 from verifacation import evaluate
 import torch
 from torch import optim
@@ -13,7 +13,7 @@ from PIL import Image
 from torchvision import transforms as trans
 import math
 import bcolz
-from models_new import resnet18, resnet34, resnet50, resnet101
+
 
 def requires_grad(model, flag=True):
     for p in model.parameters():
@@ -27,11 +27,14 @@ class face_learner(object):
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            #self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
-            #print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-            self.model = resnet101()
-            print('model generated')
-            
+            if conf.data_mode == 'pair_wise':
+                self.model = RankWrapper(
+                    conf,
+                    Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
+                ).to(conf.device)
+            else:
+                self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
+            print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
         
         if not inference:
             self.milestones = conf.milestones
@@ -39,7 +42,10 @@ class face_learner(object):
 
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
-            self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
+            if conf.data_mode == 'pair_wise':
+                self.head = RankHead(conf).to(conf.device)
+            else:
+                self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
 
             print('two model heads generated')
 
@@ -198,8 +204,8 @@ class face_learner(object):
         self.model = self.model.to(conf.device)
         self.model.train()
         running_loss = 0.      
-        requires_grad(self.head,True)
-        requires_grad(self.model,True)      
+        requires_grad(self.head, True)
+        requires_grad(self.model, True)   
         for e in range(epochs):
             print('epoch {} started'.format(e))
             

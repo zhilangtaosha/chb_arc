@@ -11,11 +11,6 @@ from model import l2_norm
 import pdb
 import cv2
 
-def judge_race(conf,label):
-    for i in range(4):
-        if label < sum(conf.race_index[:(i+1)]):
-            return i
-
 def separate_bn_paras(modules):
     if not isinstance(modules, list):
         modules = [*modules.modules()]
@@ -111,8 +106,8 @@ def face_reader(conf, conn, flag, boxes_arr, result_arr, learner, mtcnn, targets
                 boxes_arr[i] = 0 # by default,it's all 0
             for i in range(len(result_arr)):
                 result_arr[i] = -1 # by default,it's all -1
-        print('boxes_arr ï¼?{}'.format(boxes_arr[:4]))
-        print('result_arr ï¼?{}'.format(result_arr[:4]))
+        print('boxes_arr ï¼š {}'.format(boxes_arr[:4]))
+        print('result_arr ï¼š {}'.format(result_arr[:4]))
         flag.value = 0
 
 hflip = trans.Compose([
