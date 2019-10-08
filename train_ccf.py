@@ -3,6 +3,36 @@ from Learner import face_learner
 import argparse
 import torch
 # python train.py -net mobilefacenet -b 200 -w 4
+import json
+from pathlib import Path
+
+
+def check_save_path(conf):
+    check_path = [conf.work_path, conf.model_path, conf.log_path, conf.save_path]
+    for path in check_path:
+        if not path.exists():
+            path.mkdir()
+
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        import numpy as np
+        import torch
+        from pathlib import Path
+        from torchvision import transforms as trans
+
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (bytes, torch.nn.Module, Path, torch.device, trans.Compose)):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)
+
+
+def write_conf(conf, path: Path):
+    json_file = path/'conf.json'
+    with json_file.open('w') as f:
+        json.dump(conf, f, cls=MyEncoder, indent=4)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='for face verification')
@@ -13,9 +43,10 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--batch_size", help="batch_size", default=100, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=3, type=int)
     parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf, African,Caucasian,Indian,Asian]", default='ccf', type=str)
+    parser.add_argument("-workspace", "--workspace", help="work space for model", default='ir_se', type=str)
     args = parser.parse_args()
 
-    conf = get_config()
+    conf = get_config(args.workspace)
     
     if args.net_mode == 'mobilefacenet':
         conf.use_mobilfacenet = True
@@ -28,7 +59,9 @@ if __name__ == '__main__':
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
 
-    
+    check_save_path(conf)
+    write_conf(conf, conf.work_path)
+
     learner = face_learner(conf)
     learner.load_state(conf, 'ir_se50.pth', True, True)
     # learner.head.load_state_dict(torch.load('./work_space/final_model/head_2019-10-07-15-40_accuracy:0.9282857142857143_step:57080_final.pth'))

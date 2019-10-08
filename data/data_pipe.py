@@ -335,7 +335,7 @@ class PairPoolDataset(Dataset):
         
         if self.return_label_mode == 'race':
             pair_target = list(map(
-                lambda x: self.sampling_weight[0].index(self.label_to_race(x)),
+                lambda x: self.sampling_weight[0].index(self.label_to_race[x]),
                 pair_target
                 ))
 

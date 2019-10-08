@@ -5,10 +5,11 @@ from torch.nn import CrossEntropyLoss
 from torchvision import transforms as trans
 from model import RankLossWrapper
 
-def get_config(training = True):
+
+def get_config(work_space, training = True):
     conf = edict()
     conf.data_path = Path('/data2/hbchen/ccf/training')#address of the dataset
-    conf.work_path = Path('work_space_pairwise')
+    conf.work_path = Path(work_space)
     conf.model_path = conf.work_path/'models'#temp models
     conf.log_path = conf.work_path/'log'
     conf.save_path = conf.work_path/'final_model'#final models
@@ -47,19 +48,19 @@ def get_config(training = True):
         conf.ce_loss = CrossEntropyLoss()    
 
         if conf.data_mode == 'pair_wise':
-            conf.rank_multitask = False
-            conf.rank_margin = 0.5
-            conf.rank_loss_weight = 1
+            conf.rank_multitask = True
+            conf.rank_margin = 0.7
+            conf.rank_loss_weight = 0.8
             conf.rank_pos_num = 1
             conf.rank_neg_num = 8
             conf.race_neg_sampling_weight = {
                 'Indian': 0.3,
                 'African': 0.3,
-                'Caucasian': 0.15,
-                'Asian':0.25
+                'Caucasian': 0.1,
+                'Asian':0.3
             }
             conf.ce_loss = RankLossWrapper(conf)
-            conf.multitask_mode = 'rece' # [race, id]
+            conf.multitask_mode = 'race' # [race, id]
 
 #--------------------Inference Config ------------------------
     else:

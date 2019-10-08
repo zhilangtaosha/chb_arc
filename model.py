@@ -351,6 +351,7 @@ class RankLossWrapper(Module):
         pos = pos[:, pos_idx:pos_idx + 1] # -> [batch, 1], only sample one pos to compute ranking loss
         rank_loss = self.rank_loss(pos, neg, self.thresh)
 
+        label = label.view(-1)
         ce_loss = self.ce_loss(thetas, label) if thetas is not None else 0.0
 
         if self.ce_loss == None:
@@ -430,7 +431,8 @@ class RankHead(Module):
         thetas = None
         if self.race_net is not None:
             feature_in = feature.view(-1, feature.size(-1))
-            thetas = self.race_net(feature_in, lebel)
+            label = label.view(-1)
+            thetas = self.race_net(feature_in, label)
 
         return (pos_score, neg_score), thetas
 
