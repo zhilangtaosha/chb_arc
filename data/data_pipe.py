@@ -12,6 +12,13 @@ import torch
 import mxnet as mx
 from tqdm import tqdm
 
+def judge_race(conf,label):
+    for i in range(3):
+        if label < sum(conf.race_index[:(i+1)]):
+            return i
+        else :
+            return 3
+
 def de_preprocess(tensor):
     return tensor*0.5 + 0.5
     
@@ -25,6 +32,16 @@ def get_train_dataset(imgs_folder):
     ds = ImageFolder(imgs_folder, train_transform)
     class_num = ds[-1][1] + 1
     return ds, class_num
+
+class ccf_dataset(Dataset):
+    def __init__(self,imgs):
+        self.imgs = imgs
+        self.races = list(map(judge_race,self.imgs[:,1]))
+    def __getitem__(self,index):
+        return self.imgs[index,0],self.imgs[index,1],self.races[index]
+    def __len__(self):
+        return len(self.imgs)
+
 
 class ccf_test_dataset(Dataset):
     def __init__(self,imgs_folder):
@@ -114,7 +131,7 @@ def get_train_loader(conf):
         # class_num = ds.class_num()
     print('##################################')
     print(conf.batch_size)
-    
+    conf.race_num = class_num
     weights = []
     for i in range(4):
         weights+=[sum(class_num)//class_num[i] for j in range(imgs_num[i])]
@@ -124,7 +141,9 @@ def get_train_loader(conf):
     weights = torch.FloatTensor(weights)
     
     train_sampler = WeightedRandomSampler(weights,len(ds),replacement=True)
+
     loader = DataLoader(ds, batch_size=conf.batch_size, sampler = train_sampler, pin_memory=conf.pin_memory, num_workers=conf.num_workers)
+
     if isinstance(class_num,list):
         class_num = sum(class_num)
     return loader, class_num 

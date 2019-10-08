@@ -4,10 +4,12 @@ import torch
 from torch.nn import CrossEntropyLoss
 from torchvision import transforms as trans
 
-def get_config(training = True):
+def get_config(args,training = True):
     conf = edict()
+    
+    conf.race_num = None
     conf.data_path = Path('/data2/hbchen/ccf/training')#address of the dataset
-    conf.work_path = Path('work_space')
+    conf.work_path = Path(args.work_space)
     conf.model_path = conf.work_path/'models'#temp models
     conf.log_path = conf.work_path/'log_chb'
     conf.save_path = conf.work_path/'final_model'#final models
@@ -23,7 +25,7 @@ def get_config(training = True):
                     trans.ToTensor(),
                     trans.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
                 ])
-    conf.data_mode = 'African'
+    #conf.data_mode = 'African'
     conf.vgg_folder = conf.data_path/'faces_vgg_112x112'
     conf.ms1m_folder = conf.data_path/'faces_ms1m_112x112'
     conf.emore_folder = conf.data_path/'faces_emore'

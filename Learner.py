@@ -13,7 +13,7 @@ from PIL import Image
 from torchvision import transforms as trans
 import math
 import bcolz
-from models_resnet import resnet18, resnet34, resnet50, resnet101
+from models_resnet import resnet18, resnet34, resnet50, resnet101,ArcMarginModel
 
 def judge_race(conf,label):
     for i in range(3):
@@ -34,10 +34,10 @@ class face_learner(object):
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            #self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
-            #print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-            self.model = resnet101()
-            print('model generated')
+            self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
+            print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+            #self.model = resnet101()
+            #print('model generated')
             
         
         if not inference:
@@ -46,9 +46,10 @@ class face_learner(object):
 
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
-            self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
-            self.head_race = Arcface(embedding_size=conf.embedding_size, classnum=4).to(conf.device)
-            
+            #self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
+            #self.head_race = Arcface(embedding_size=conf.embedding_size, classnum=4).to(conf.device)
+            self.head = ArcMarginModel(s=64,m=0.5)
+            self.head_race = ArcMarginModel(s=64,m=0.5)
             print('two model heads generated')
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model)
@@ -98,16 +99,13 @@ class face_learner(object):
                 self.optimizer.state_dict(), save_path /
                 ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
     
-    def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False):
-        if from_save_folder:
-            save_path = conf.save_path
-        else:
-            save_path = conf.model_path            
-        self.model.load_state_dict(torch.load(save_path/'model_{}'.format(fixed_str)),strict=False)
+    def load_state(self, model,model_only=False,head=None,head_race=None,optimizer=None):
+           
+        self.model.load_state_dict(torch.load(model),strict=False)
         if not model_only:
-            self.head.load_state_dict(torch.load(save_path/'head_{}'.format(fixed_str)))
-            self.head_race.load_state_dict(torch.load(save_path/'head_race_{}'.format(fixed_str)))
-            self.optimizer.load_state_dict(torch.load(save_path/'optimizer_{}'.format(fixed_str)))
+            self.head.load_state_dict(torch.load(head))
+            self.head_race.load_state_dict(torch.load(head_race))
+            self.optimizer.load_state_dict(torch.load(optimizer))
 
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
         self.writer.add_scalar('{}_accuracy'.format(db_name), accuracy, self.step)
@@ -240,11 +238,10 @@ class face_learner(object):
                 embeddings = self.model(imgs)
                 thetas ,w = self.head(embeddings, labels)
                 thetas_race ,w_race = self.head_race(embeddings, labels_race)
-                print(w.shape)
-                print(w.t().shape)
+                
                 loss = conf.ce_loss(thetas, labels) + conf.ce_loss(thetas_race, labels_race)
                 loss2 = torch.mm(w_race.t(),w)
-                print(loss2.shape)
+                
                 loss2 =  \
                 torch.sum(loss2[0][:sum(conf.race_num[:1])])+ \
                 torch.sum(loss2[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])])+ \

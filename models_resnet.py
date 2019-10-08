@@ -325,15 +325,15 @@ class MobileNet(nn.Module):
 
 
 class ArcMarginModel(nn.Module):
-    def __init__(self, args):
+    def __init__(self, s,m,easy_margin=False):
         super(ArcMarginModel, self).__init__()
 
         self.weight = Parameter(torch.FloatTensor(num_classes, args.emb_size))
         nn.init.xavier_uniform_(self.weight)
 
-        self.easy_margin = args.easy_margin
-        self.m = args.margin_m
-        self.s = args.margin_s
+        self.easy_margin = easy_margin
+        self.m = m
+        self.s = s
 
         self.cos_m = math.cos(self.m)
         self.sin_m = math.sin(self.m)
