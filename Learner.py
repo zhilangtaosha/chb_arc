@@ -14,7 +14,14 @@ from torchvision import transforms as trans
 import math
 import bcolz
 from models_resnet import resnet18, resnet34, resnet50, resnet101
-from utils import judge_race
+
+def judge_race(conf,label):
+    for i in range(3):
+        if label < sum(conf.race_index[:(i+1)]):
+            return i
+        else :
+            return 3
+
 def requires_grad(model, flag=True):
     for p in model.parameters():
         p.requires_grad = flag
@@ -40,7 +47,8 @@ class face_learner(object):
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
             self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
-
+            self.head_race = Arcface(embedding_size=conf.embedding_size, classnum=4).to(conf.device)
+            
             print('two model heads generated')
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model)
@@ -48,12 +56,12 @@ class face_learner(object):
             if conf.use_mobilfacenet:
                 self.optimizer = optim.SGD([
                                     {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
-                                    {'params': [paras_wo_bn[-1]] + [self.head.kernel], 'weight_decay': 4e-4},
+                                    {'params': [paras_wo_bn[-1]] + [self.head.kernel] + [self.head_race.kernel], 'weight_decay': 4e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             else:
                 self.optimizer = optim.SGD([
-                                    {'params': paras_wo_bn + [self.head.kernel], 'weight_decay': 5e-4},
+                                    {'params': paras_wo_bn + [self.head.kernel] + [self.head_race.kernel], 'weight_decay': 5e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             print(self.optimizer)
@@ -84,6 +92,9 @@ class face_learner(object):
                 self.head.state_dict(), save_path /
                 ('head_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
             torch.save(
+                self.head_race.state_dict(), save_path /
+                ('head__race{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
+            torch.save(
                 self.optimizer.state_dict(), save_path /
                 ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
     
@@ -95,6 +106,7 @@ class face_learner(object):
         self.model.load_state_dict(torch.load(save_path/'model_{}'.format(fixed_str)),strict=False)
         if not model_only:
             self.head.load_state_dict(torch.load(save_path/'head_{}'.format(fixed_str)))
+            self.head_race.load_state_dict(torch.load(save_path/'head_race_{}'.format(fixed_str)))
             self.optimizer.load_state_dict(torch.load(save_path/'optimizer_{}'.format(fixed_str)))
 
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
@@ -199,6 +211,7 @@ class face_learner(object):
         self.model.train()
         running_loss = 0.      
         requires_grad(self.head,True)
+        requires_grad(self.head_race,True)
         requires_grad(self.model,False)      
         for e in range(epochs):
             print('epoch {} started'.format(e))
@@ -209,13 +222,35 @@ class face_learner(object):
                 self.schedule_lr()      
             if e == self.milestones[2]:
                 self.schedule_lr()                                 
-            for imgs, labels in tqdm(iter(self.loader)):
+            for imgs, labels  in tqdm(iter(self.loader)):
                 imgs = imgs.to(conf.device)
+                labels_race = torch.zeros_like(labels)
+                race0_index = labels.lt(sum(conf.race_num[:1]))
+                race1_index = labels.lt(sum(conf.race_num[:2])) & labels.ge(sum(conf.race_num[:1]))
+                race2_index = labels.lt(sum(conf.race_num[:3])) & labels.ge(sum(conf.race_num[:2]))
+                race3_index = labels.ge(sum(conf.race_num[:3]))
+                labels_race[race0_index]=0
+                labels_race[race1_index] = 1
+                labels_race[race2_index] = 2
+                labels_race[race3_index] = 3
+
                 labels = labels.to(conf.device)
+                labels_race = labels_race.to(conf.device)
                 self.optimizer.zero_grad()
                 embeddings = self.model(imgs)
-                thetas = self.head(embeddings, labels)
-                loss = conf.ce_loss(thetas, labels)
+                thetas ,w = self.head(embeddings, labels)
+                thetas_race ,w_race = self.head_race(embeddings, labels_race)
+                print(w.shape)
+                print(w.t().shape)
+                loss = conf.ce_loss(thetas, labels) + conf.ce_loss(thetas_race, labels_race)
+                loss2 = torch.mm(w_race.t(),w)
+                print(loss2.shape)
+                loss2 =  \
+                torch.sum(loss2[0][:sum(conf.race_num[:1])])+ \
+                torch.sum(loss2[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])])+ \
+                torch.sum(loss2[2][sum(conf.race_num[:2]):sum(conf.race_num[:3])])+ \
+                torch.sum(loss2[3][sum(conf.race_num[:3]):])
+
                 loss.backward()
                 running_loss += loss.item()
                 self.optimizer.step()
