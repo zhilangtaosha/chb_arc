@@ -13,8 +13,8 @@ from PIL import Image
 from torchvision import transforms as trans
 import math
 import bcolz
-from models_new import resnet18, resnet34, resnet50, resnet101
-
+from models_resnet import resnet18, resnet34, resnet50, resnet101
+from utils import judge_race
 def requires_grad(model, flag=True):
     for p in model.parameters():
         p.requires_grad = flag
@@ -199,7 +199,7 @@ class face_learner(object):
         self.model.train()
         running_loss = 0.      
         requires_grad(self.head,True)
-        requires_grad(self.model,True)      
+        requires_grad(self.model,False)      
         for e in range(epochs):
             print('epoch {} started'.format(e))
             
