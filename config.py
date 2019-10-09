@@ -9,7 +9,7 @@ def get_config(args,training = True):
     
     conf.race_num = None
     conf.data_path = Path('/data2/hbchen/ccf/training')#address of the dataset
-    conf.work_path = Path(args.work_space)
+    conf.work_path = Path(args.workspace)
     conf.model_path = conf.work_path/'models'#temp models
     conf.log_path = conf.work_path/'log_chb'
     conf.save_path = conf.work_path/'final_model'#final models
@@ -40,7 +40,7 @@ def get_config(args,training = True):
         
     #     conf.weight_decay = 5e-4
         conf.lr = 1e-3
-        conf.milestones = [12,15,18]
+        conf.milestones = [5,12,18]
         conf.momentum = 0.9
         conf.pin_memory = False
 #         conf.num_workers = 4 # when batchsize is 200

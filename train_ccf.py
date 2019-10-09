@@ -43,13 +43,14 @@ if __name__ == '__main__':
     parser.add_argument('-lr','--lr',help='learning rate',default=1e-3, type=float)
     parser.add_argument("-b", "--batch_size", help="batch_size", default=100, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=3, type=int)
-    parser.add_argument("-p", "--pretrained", help="pretrained_model", default='./pretrained_model/model_ir_se50.pth', type=str)
-    parser.add_argument("-workspace", "--workspace", help="work space for model", default='work_space_ir_se', type=str)
+    parser.add_argument("-p", "--pretrained", help="pretrained_model", default='./pretrained_model/model_resnet101.pth', type=str)
+    parser.add_argument("-workspace", "--workspace", help="work space for model", default='work_space_ir_se_101', type=str)
+    parser.add_argument("-s", "--struct", help="backbone struct", default='ir_se_101', type=str)
     parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf,African,Caucasian,Indian,Asian]",default='ccf', type=str)
     args = parser.parse_args()
 
     conf = get_config(args)
-    
+    conf.struct = args.struct
     if args.net_mode == 'mobilefacenet':
         conf.use_mobilfacenet = True
     else:
@@ -66,7 +67,10 @@ if __name__ == '__main__':
     write_conf(conf, conf.work_path)
 
     learner = face_learner(conf)
-    learner.load_state(conf, model=args.pretrained , model_only=True)
-    #learner.head.load_state_dict(torch.load('./work_space/final_model/head_2019-10-07-15-40_accuracy:0.9282857142857143_step:57080_final.pth'))
-    #learner.schedule_lr()
+    head_race_pretrained = './work_space_ir_se_head/models/head__race2019-10-09-00-53_accuracy:0.9287142857142857_step:34248_None.pth'
+    head_pretrained = './work_space_ir_se_head/models/head_2019-10-09-00-53_accuracy:0.9287142857142857_step:34248_None.pth'
+    #learner.load_state(model=args.pretrained , model_only=True,head=head_pretrained,head_race=head_race_pretrained)
+    learner.load_state(model=args.pretrained , model_only=True)
+    
+    learner.schedule_lr()
     learner.train(conf, args.epochs)

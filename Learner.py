@@ -34,10 +34,15 @@ class face_learner(object):
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
-            print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-            #self.model = resnet101()
-            #print('model generated')
+        ###############################  ir_se50  ########################################
+            if conf.struct =='ir_se_50':
+                self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
+            
+                print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+        ###############################  resnet101  ######################################
+            if conf.struct =='ir_se_101':
+                self.model = resnet101()
+                print('resnet101 model generated')
             
         
         if not inference:
@@ -46,10 +51,16 @@ class face_learner(object):
 
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
-            #self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
-            #self.head_race = Arcface(embedding_size=conf.embedding_size, classnum=4).to(conf.device)
-            self.head = ArcMarginModel(s=64,m=0.5)
-            self.head_race = ArcMarginModel(s=64,m=0.5)
+            
+        ###############################  ir_se50  ########################################
+            if conf.struct =='ir_se_50':
+                self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
+                self.head_race = Arcface(embedding_size=conf.embedding_size, classnum=4).to(conf.device)
+        
+        ###############################  resnet101  ######################################
+            if conf.struct =='ir_se_101':
+                self.head = ArcMarginModel(embedding_size=conf.embedding_size,classnum=self.class_num).to(conf.device)
+                self.head_race = ArcMarginModel(embedding_size=conf.embedding_size,classnum=self.class_num).to(conf.device)
             print('two model heads generated')
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model)
@@ -75,7 +86,8 @@ class face_learner(object):
             self.save_every = len(self.loader)//1
             self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(conf.val_folder)
         else:
-            self.threshold = conf.threshold
+            #self.threshold = conf.threshold
+            pass
     
 
 
@@ -99,12 +111,13 @@ class face_learner(object):
                 self.optimizer.state_dict(), save_path /
                 ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
     
-    def load_state(self, model,model_only=False,head=None,head_race=None,optimizer=None):
+    def load_state(self, model, model_only=False,head=None,head_race=None,optimizer=None):
            
         self.model.load_state_dict(torch.load(model),strict=False)
         if not model_only:
             self.head.load_state_dict(torch.load(head))
             self.head_race.load_state_dict(torch.load(head_race))
+        if optimizer is not None:
             self.optimizer.load_state_dict(torch.load(optimizer))
 
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
@@ -207,9 +220,11 @@ class face_learner(object):
     def train(self, conf, epochs):
         self.model = self.model.to(conf.device)
         self.model.train()
+        self.head.train()
+        self.head_race.train()
         running_loss = 0.      
         requires_grad(self.head,True)
-        requires_grad(self.head_race,True)
+        requires_grad(self.head_race,False)
         requires_grad(self.model,False)      
         for e in range(epochs):
             print('epoch {} started'.format(e))
@@ -239,7 +254,8 @@ class face_learner(object):
                 thetas ,w = self.head(embeddings, labels)
                 thetas_race ,w_race = self.head_race(embeddings, labels_race)
                 
-                loss = conf.ce_loss(thetas, labels) + conf.ce_loss(thetas_race, labels_race)
+                loss = conf.ce_loss(thetas, labels) 
+                loss1 = conf.ce_loss(thetas_race, labels_race)
                 loss2 = torch.mm(w_race.t(),w)
                 
                 loss2 =  \
@@ -278,7 +294,10 @@ class face_learner(object):
         for params in self.optimizer.param_groups:                 
             params['lr'] /= 10
         print(self.optimizer)
-    
+    def schedule_lr_add(self):
+        for params in self.optimizer.param_groups:                 
+            params['lr'] *= 10
+        print(self.optimizer)
     def infer(self, conf, faces, target_embs, tta=False):
         '''
         faces : list of PIL Image

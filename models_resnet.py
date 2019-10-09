@@ -216,7 +216,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = self.bn3(x)
-        # x = F.normalize(x)
+        x = F.normalize(x)
         return x
 
 
@@ -325,10 +325,10 @@ class MobileNet(nn.Module):
 
 
 class ArcMarginModel(nn.Module):
-    def __init__(self, s,m,easy_margin=False):
+    def __init__(self, embedding_size=512, classnum=51332,s=64,m=0.5,easy_margin=False):
         super(ArcMarginModel, self).__init__()
 
-        self.weight = Parameter(torch.FloatTensor(num_classes, args.emb_size))
+        self.weight = Parameter(torch.FloatTensor(classnum, embedding_size))
         nn.init.xavier_uniform_(self.weight)
 
         self.easy_margin = easy_margin
@@ -341,7 +341,8 @@ class ArcMarginModel(nn.Module):
         self.mm = math.sin(math.pi - self.m) * self.m
 
     def forward(self, input, label):
-        x = F.normalize(input)
+        #x = F.normalize(input)
+        x = input
         W = F.normalize(self.weight)
         cosine = F.linear(x, W)
         sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
@@ -355,11 +356,11 @@ class ArcMarginModel(nn.Module):
         output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
         output *= self.s
 
-        return output
+        return output,W.t()
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # args = parse_args()
     # model = resnet152(args).to(device)
-    model = MobileNet(1.0).to(device)
-    summary(model, (3, 112, 112))
+    #model = MobileNet(1.0).to(device)
+    #summary(model, (3, 112, 112))
