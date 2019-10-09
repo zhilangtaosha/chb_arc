@@ -41,7 +41,7 @@ class face_learner(object):
                 print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
         ###############################  resnet101  ######################################
             if conf.struct =='ir_se_101':
-                self.model = resnet101()
+                self.model = resnet101().to(conf.device)
                 print('resnet101 model generated')
             
         
@@ -111,11 +111,12 @@ class face_learner(object):
                 self.optimizer.state_dict(), save_path /
                 ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
     
-    def load_state(self, model, model_only=False,head=None,head_race=None,optimizer=None):
+    def load_state(self, model, head=None,head_race=None,optimizer=None):
            
         self.model.load_state_dict(torch.load(model),strict=False)
-        if not model_only:
+        if head is not None:
             self.head.load_state_dict(torch.load(head))
+        if head_race is not None:
             self.head_race.load_state_dict(torch.load(head_race))
         if optimizer is not None:
             self.optimizer.load_state_dict(torch.load(optimizer))
@@ -217,15 +218,15 @@ class face_learner(object):
                 plt.plot(log_lrs[10:-5], losses[10:-5])
                 return log_lrs, losses    
 
-    def train(self, conf, epochs):
+    def train(self, conf, epochs,model,head,head_race):
         self.model = self.model.to(conf.device)
         self.model.train()
         self.head.train()
         self.head_race.train()
         running_loss = 0.      
-        requires_grad(self.head,True)
-        requires_grad(self.head_race,False)
-        requires_grad(self.model,False)      
+        requires_grad(self.head,head)
+        requires_grad(self.head_race,head_race)
+        requires_grad(self.model,model)      
         for e in range(epochs):
             print('epoch {} started'.format(e))
             
@@ -254,7 +255,7 @@ class face_learner(object):
                 thetas ,w = self.head(embeddings, labels)
                 thetas_race ,w_race = self.head_race(embeddings, labels_race)
                 
-                loss = conf.ce_loss(thetas, labels) 
+                loss0 = conf.ce_loss(thetas, labels) 
                 loss1 = conf.ce_loss(thetas_race, labels_race)
                 loss2 = torch.mm(w_race.t(),w)
                 
@@ -263,7 +264,8 @@ class face_learner(object):
                 torch.sum(loss2[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])])+ \
                 torch.sum(loss2[2][sum(conf.race_num[:2]):sum(conf.race_num[:3])])+ \
                 torch.sum(loss2[3][sum(conf.race_num[:3]):])
-
+                
+                loss = loss0 + loss1 + loss2
                 loss.backward()
                 running_loss += loss.item()
                 self.optimizer.step()

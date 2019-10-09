@@ -40,7 +40,7 @@ def get_config(args,training = True):
         
     #     conf.weight_decay = 5e-4
         conf.lr = 1e-3
-        conf.milestones = [5,12,18]
+        conf.milestones = [10,15,18]
         conf.momentum = 0.9
         conf.pin_memory = False
 #         conf.num_workers = 4 # when batchsize is 200

@@ -40,11 +40,11 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--epochs", help="training epochs", default=20, type=int)
     parser.add_argument("-net", "--net_mode", help="which network, [ir, ir_se, mobilefacenet]",default='ir_se', type=str)
     parser.add_argument("-depth", "--net_depth", help="how many layers [50,100,152]", default=50, type=int)
-    parser.add_argument('-lr','--lr',help='learning rate',default=1e-3, type=float)
-    parser.add_argument("-b", "--batch_size", help="batch_size", default=100, type=int)
+    parser.add_argument('-lr','--lr',help='learning rate',default=1e-4, type=float)
+    parser.add_argument("-b", "--batch_size", help="batch_size", default=128, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=3, type=int)
     parser.add_argument("-p", "--pretrained", help="pretrained_model", default='./pretrained_model/model_resnet101.pth', type=str)
-    parser.add_argument("-workspace", "--workspace", help="work space for model", default='work_space_ir_se_101', type=str)
+    parser.add_argument("-workspace", "--workspace", help="work space for model", default='work_space_ir_se_101_multihead', type=str)
     parser.add_argument("-s", "--struct", help="backbone struct", default='ir_se_101', type=str)
     parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf,African,Caucasian,Indian,Asian]",default='ccf', type=str)
     args = parser.parse_args()
@@ -62,15 +62,17 @@ if __name__ == '__main__':
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
     conf.pretrained = args.pretrained
+    conf.head_race_pretrained = "/home/hbchen/code/ccf/InsightFace_CCF/work_space_ir_se_101_head_race/models/head__race2019-10-10-00-08_accuracy:0.8715714285714287_step:8920_None.pth"
+    conf.head_pretrained = "/home/hbchen/code/ccf/InsightFace_CCF/work_space_ir_se_101_head/models/head_2019-10-09-18-56_accuracy:0.8734285714285714_step:54226_None.pth"
+    
     check_save_path(conf)
     
     write_conf(conf, conf.work_path)
 
     learner = face_learner(conf)
-    head_race_pretrained = './work_space_ir_se_head/models/head__race2019-10-09-00-53_accuracy:0.9287142857142857_step:34248_None.pth'
-    head_pretrained = './work_space_ir_se_head/models/head_2019-10-09-00-53_accuracy:0.9287142857142857_step:34248_None.pth'
-    #learner.load_state(model=args.pretrained , model_only=True,head=head_pretrained,head_race=head_race_pretrained)
-    learner.load_state(model=args.pretrained , model_only=True)
     
-    learner.schedule_lr()
-    learner.train(conf, args.epochs)
+    #learner.load_state(model=args.pretrained , model_only=True,head=head_pretrained,head_race=head_race_pretrained)
+    learner.load_state(model=args.pretrained , head=conf.head_pretrained,head_race=conf.head_race_pretrained,optimizer=None)
+    
+    #learner.schedule_lr()
+    learner.train(conf, args.epochs,model=False,head=True,head_race=True)
