@@ -328,8 +328,8 @@ class ArcMarginModel(nn.Module):
     def __init__(self, embedding_size=512, classnum=51332,s=64,m=0.5,easy_margin=False):
         super(ArcMarginModel, self).__init__()
 
-        self.weight = Parameter(torch.FloatTensor(classnum, embedding_size))
-        nn.init.xavier_uniform_(self.weight)
+        self.kernel = Parameter(torch.FloatTensor(classnum, embedding_size))
+        nn.init.xavier_uniform_(self.kernel)
 
         self.easy_margin = easy_margin
         self.m = m
@@ -343,7 +343,7 @@ class ArcMarginModel(nn.Module):
     def forward(self, input, label):
         #x = F.normalize(input)
         x = input
-        W = F.normalize(self.weight)
+        W = F.normalize(self.kernel)
         cosine = F.linear(x, W)
         sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
         phi = cosine * self.cos_m - sine * self.sin_m  # cos(theta + m)
@@ -351,7 +351,7 @@ class ArcMarginModel(nn.Module):
             phi = torch.where(cosine > 0, phi, cosine)
         else:
             phi = torch.where(cosine > self.th, phi, cosine - self.mm)
-        one_hot = torch.zeros(cosine.size(), device=device)
+        one_hot = torch.zeros(cosine.size()).cuda()
         one_hot.scatter_(1, label.view(-1, 1).long(), 1)
         output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
         output *= self.s
