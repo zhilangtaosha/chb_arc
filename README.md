@@ -31,7 +31,7 @@ learner.train(conf, args.epochs,model=False,head=True,head_race=True)，如若�
 
 ---------------------------------------------------------------------------------------------------------
 测试方法：
-python test——ccf.py
+python test_ccf.py
 
 --csv为模板csv   ；
 --tocsv为保存的新的csv  ；
