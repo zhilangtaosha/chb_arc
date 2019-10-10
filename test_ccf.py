@@ -85,11 +85,11 @@ if __name__ == '__main__':
     parser.add_argument("--csv",default="/data2/hbchen/ccf/submission_template.csv", help="address for the test csv")
     parser.add_argument("--tocsv",default="./results/submission_101.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
-    parser.add_argument("--ckpt",default="./pretrained_model/model_resnet101.pth", help="model checkpoints")
+    parser.add_argument("--ckpt",default="./work_space_ir_se_101_model/models/model_2019-10-10-04-15_accuracy:0.8862857142857143_step:62426_None.pth", help="model checkpoints")
     parser.add_argument("--save_mat",default='./results/face_embedding_101.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
-    parser.add_argument("-b", "--batch_size", default =50,type=int,help="batch_size")
-    parser.add_argument("-ws", "--workspace", default ='work_space_101',type=str)
+    parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
+    parser.add_argument("-ws", "--workspace", default ='work_space_multimodel',type=str)
     parser.add_argument("-s", "--struct", help="backbone struct", default='ir_se_101', type=str)
     args = parser.parse_args()
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     conf.struct = args.struct
     ##############################
     learner = face_learner(conf, True)
-    learner.load_state(model=args.ckpt , model_only=True)
+    learner.load_state(model=args.ckpt , head=None,head_race=None,optimizer=None)
     
     learner.model = learner.model.to(conf.device)
     learner.model.eval()
