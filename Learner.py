@@ -13,7 +13,7 @@ from PIL import Image
 from torchvision import transforms as trans
 import math
 import bcolz
-from models_resnet import resnet18, resnet34, resnet50, resnet101,ArcMarginModel
+from models_101 import resnet18, resnet34, resnet50, resnet101,ArcMarginModel
 
 def judge_race(conf,label):
     for i in range(3):
@@ -259,12 +259,13 @@ class face_learner(object):
                 loss1 = conf.ce_loss(thetas_race, labels_race)
                 loss2 = torch.mm(w_race.t(),w)
                 
-                loss2 =  \
-                torch.sum(loss2[0][:sum(conf.race_num[:1])])+ \
-                torch.sum(loss2[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])])+ \
-                torch.sum(loss2[2][sum(conf.race_num[:2]):sum(conf.race_num[:3])])+ \
-                torch.sum(loss2[3][sum(conf.race_num[:3]):])
+                target =  torch.zeros_like(loss2)
                 
+                target[0][:sum(conf.race_num[:1])] = 1
+                target[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])] = 1
+                target[2][sum(conf.race_num[:2]):sum(conf.race_num[:3])] = 1
+                target[3][sum(conf.race_num[:3]):] = 1
+                loss2 = torch.nn.functional.mse_loss(loss2 , target)
                 loss = loss0 + loss1 + loss2
                 loss.backward()
                 running_loss += loss.item()
