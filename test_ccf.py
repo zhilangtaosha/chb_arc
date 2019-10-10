@@ -40,13 +40,25 @@ def get_featurs(model, test_list):
             pbar.update(imgs.shape[0])
             imgs = imgs.to(conf.device)
             if idx==0:
-                feature = model(imgs)
-                feature = feature.detach().cpu().numpy()
-                features = feature
+                if args.tta:
+                    mirror = torch.flip(imgs,[-1]).to(conf.device)
+                    feature1 = model(imgs)
+                    feature2 = model(mirror)
+                    feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
+                else:
+                    feature = model(imgs)
+                    feature = feature.detach().cpu().numpy()
+                    features = feature
             else:
-                feature = model(imgs)
-                feature = feature.detach().cpu().numpy()
-                features = np.concatenate((features, feature), axis=0)
+                if args.tta:
+                    mirror = torch.flip(imgs,[-1]).to(conf.device)
+                    feature1 = model(imgs)
+                    feature2 = model(mirror)
+                    feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
+                else:
+                    feature = model(imgs)
+                    feature = feature.detach().cpu().numpy()
+                    features = np.concatenate((features, feature), axis=0)
     return features
     # for idx, img_path in enumerate(test_list):
     #     pbar.update(1)
@@ -83,10 +95,10 @@ def get_feature_dict(test_list, features):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='test for ccf dataset')
     parser.add_argument("--csv",default="/data2/hbchen/ccf/submission_template.csv", help="address for the test csv")
-    parser.add_argument("--tocsv",default="./results/submission_101.csv", help="csv result")
+    parser.add_argument("--tocsv",default="/data2/hbchen/ccf/results/submission_101_tta.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
-    parser.add_argument("--ckpt",default="./work_space_ir_se_101_model/models/model_2019-10-10-04-15_accuracy:0.8862857142857143_step:62426_None.pth", help="model checkpoints")
-    parser.add_argument("--save_mat",default='./results/face_embedding_101.mat', help="feature_mat")
+    parser.add_argument("--ckpt",default="/data2/hbchen/ccf/pretrained_model/model_irse101_finetune.pth", help="model checkpoints")
+    parser.add_argument("--save_mat",default='/data2/hbchen/ccf/results/face_embedding_101_tta.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
     parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
     parser.add_argument("-ws", "--workspace", default ='work_space_multimodel',type=str)
