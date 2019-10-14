@@ -6,6 +6,8 @@ import os
 import torch
 import json
 from pathlib import Path
+os.environ["OMP_NUM_THREADS"] = "4"
+
 # python train.py -net mobilefacenet -b 200 -w 4
 
 def check_save_path(conf):
@@ -37,14 +39,14 @@ def write_conf(conf, path: Path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='for face verification')
-    parser.add_argument("-e", "--epochs", help="training epochs", default=20, type=int)
+    parser.add_argument("-e", "--epochs", help="training epochs", default=45, type=int)
     parser.add_argument("-net", "--net_mode", help="which network, [ir, ir_se, mobilefacenet]",default='ir_se', type=str)
     parser.add_argument("-depth", "--net_depth", help="how many layers [50,100,152]", default=50, type=int)
     parser.add_argument('-lr','--lr',help='learning rate',default=1e-4, type=float)
-    parser.add_argument("-b", "--batch_size", help="batch_size", default=128, type=int)
+    parser.add_argument("-b", "--batch_size", help="batch_size", default=50, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=3, type=int)
-    parser.add_argument("-p", "--pretrained", help="pretrained_model", default='./pretrained_model/model_resnet101.pth', type=str)
-    parser.add_argument("-workspace", "--workspace", help="work space for model", default='work_space_ir_se_101_multihead', type=str)
+    parser.add_argument("-p", "--pretrained", help="pretrained_model", default='/data2/hbchen/ccf/pretrained_model/model_ir_se101.pth', type=str)
+    parser.add_argument("-ws", "--workspace", help="work space for model", default='/data2/hbchen/ccf/workspace_ir_se101_finetune_dist', type=str)
     parser.add_argument("-s", "--struct", help="backbone struct", default='ir_se_101', type=str)
     parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat, ccf,African,Caucasian,Indian,Asian]",default='ccf', type=str)
     args = parser.parse_args()
@@ -56,15 +58,21 @@ if __name__ == '__main__':
     else:
         conf.net_mode = args.net_mode
         conf.net_depth = args.net_depth    
-    
+    conf.epochs = args.epochs
     conf.lr = args.lr
     conf.batch_size = args.batch_size
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
+    conf.model = False
+    conf.head = True
+    conf.head_race = False
+    conf.loss0=True#loss of head
+    conf.loss1=False#loss of race head
+    conf.loss2=False#loss of multi head
     conf.pretrained = args.pretrained
-    conf.head_race_pretrained = "/home/hbchen/code/ccf/InsightFace_CCF/work_space_ir_se_101_head_race/models/head__race2019-10-10-00-08_accuracy:0.8715714285714287_step:8920_None.pth"
-    conf.head_pretrained = "/home/hbchen/code/ccf/InsightFace_CCF/work_space_ir_se_101_head/models/head_2019-10-09-18-56_accuracy:0.8734285714285714_step:54226_None.pth"
-    
+    conf.head_race_pretrained = None
+    conf.head_pretrained = None
+    conf.optimizer = None
     check_save_path(conf)
     
     write_conf(conf, conf.work_path)
@@ -72,7 +80,7 @@ if __name__ == '__main__':
     learner = face_learner(conf)
     
     #learner.load_state(model=args.pretrained , model_only=True,head=head_pretrained,head_race=head_race_pretrained)
-    learner.load_state(model=args.pretrained , head=conf.head_pretrained,head_race=conf.head_race_pretrained,optimizer=None)
-    
+    #learner.load_state(model=args.pretrained , head=conf.head_pretrained,head_race=conf.head_race_pretrained,optimizer=None)
+    learner.load_state(model=args.pretrained , head=conf.head_pretrained,head_race=conf.head_race_pretrained,optimizer=conf.optimizer)
     #learner.schedule_lr()
-    learner.train(conf, args.epochs,model=False,head=True,head_race=True)
+    learner.train(conf, args.epochs)

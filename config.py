@@ -19,7 +19,7 @@ def get_config(args,training = True):
     conf.net_depth = 50
     conf.drop_ratio = 0.6
     conf.net_mode = 'ir_se' # or 'ir'
-    conf.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    conf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     conf.test_transform = trans.Compose([
                     trans.Resize((112,112)),
                     trans.CenterCrop((112,112)),

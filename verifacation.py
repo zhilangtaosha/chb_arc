@@ -48,6 +48,14 @@ def calculate_roc(thresholds, embeddings1, embeddings2, actual_issame, nrof_fold
     if pca == 0:
         diff = np.subtract(embeddings1, embeddings2)
         dist = np.sum(np.square(diff), 1)
+        dist = dist/4
+        dist=1-dist
+        #embeddings1 = embeddings1/(np.linalg.norm(embeddings1,2,axis=1).reshape(-1,1))
+        #embeddings2 = embeddings2/(np.linalg.norm(embeddings2,2,axis=1).reshape(-1,1))
+        #dist = np.sum(embeddings1*embeddings2,1)
+        #
+
+
 
     for fold_idx, (train_set, test_set) in enumerate(k_fold.split(indices)):
         # print('train_set', train_set)
@@ -65,9 +73,16 @@ def calculate_roc(thresholds, embeddings1, embeddings2, actual_issame, nrof_fold
             embed1 = sklearn.preprocessing.normalize(embed1)
             embed2 = sklearn.preprocessing.normalize(embed2)
             # print(embed1.shape, embed2.shape)
+            
+            #embeddings1 = embeddings1/(np.linalg.norm(embeddings1,2,axis=1).reshape(-1,1))
+            #embeddings2 = embeddings2/(np.linalg.norm(embeddings2,2,axis=1).reshape(-1,1))
+            #dist = np.sum(embeddings1*embeddings2,1)
+            
             diff = np.subtract(embed1, embed2)
             dist = np.sum(np.square(diff), 1)
-
+            dist = dist/4
+            dist=1-dist
+    
         # Find the best threshold for the fold
         acc_train = np.zeros((nrof_thresholds))
         for threshold_idx, threshold in enumerate(thresholds):
@@ -89,7 +104,8 @@ def calculate_roc(thresholds, embeddings1, embeddings2, actual_issame, nrof_fold
 
 
 def calculate_accuracy(threshold, dist, actual_issame):
-    predict_issame = np.less(dist, threshold)
+    #predict_issame = np.less(dist, threshold)
+    predict_issame = np.greater(dist, threshold)
     tp = np.sum(np.logical_and(predict_issame, actual_issame))
     fp = np.sum(np.logical_and(predict_issame, np.logical_not(actual_issame)))
     tn = np.sum(np.logical_and(np.logical_not(predict_issame), np.logical_not(actual_issame)))
@@ -158,7 +174,8 @@ def calculate_val_far(threshold, dist, actual_issame):
 
 def evaluate(embeddings, actual_issame, nrof_folds=10, pca=0):
     # Calculate evaluation metrics
-    thresholds = np.arange(0, 4, 0.01)
+    #thresholds = np.arange(0, 4, 0.01)
+    thresholds = np.arange(0, 1, 0.0025)
     embeddings1 = embeddings[0::2]
     embeddings2 = embeddings[1::2]
     tpr, fpr, accuracy, best_thresholds = calculate_roc(thresholds, embeddings1, embeddings2,

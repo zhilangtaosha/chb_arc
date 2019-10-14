@@ -1,5 +1,6 @@
 import cv2
 import os
+os.environ["OMP_NUM_THREADS"] = "4"
 import numpy as np
 import time
 import scipy.io as sio
@@ -29,6 +30,12 @@ class TestSet(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.test_list)
 
+def l2_norm(input,axis=1):
+    norm = torch.norm(input,2,axis,True)
+    output = torch.div(input, norm)
+    return output
+
+
 def get_featurs(model, test_list):
     # device = torch.device("cuda")
 
@@ -44,21 +51,27 @@ def get_featurs(model, test_list):
                     mirror = torch.flip(imgs,[-1]).to(conf.device)
                     feature1 = model(imgs)
                     feature2 = model(mirror)
-                    feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
+                    feature = (feature1 + feature2)
+                    feature = l2_norm(feature).detach().cpu().numpy()
+                    
+                    #feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
+                    
                 else:
                     feature = model(imgs)
                     feature = feature.detach().cpu().numpy()
-                    features = feature
+                features = feature
             else:
                 if args.tta:
                     mirror = torch.flip(imgs,[-1]).to(conf.device)
                     feature1 = model(imgs)
                     feature2 = model(mirror)
-                    feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
+                    feature = (feature1 + feature2)
+                    feature = l2_norm(feature).detach().cpu().numpy()
+                    #feature = torch.cat((feature1,feature2),1).detach().cpu().numpy()
                 else:
                     feature = model(imgs)
                     feature = feature.detach().cpu().numpy()
-                    features = np.concatenate((features, feature), axis=0)
+                features = np.concatenate((features, feature), axis=0)
     return features
     # for idx, img_path in enumerate(test_list):
     #     pbar.update(1)
@@ -84,6 +97,7 @@ def cosin_metric(x1, x2):
 def dist(x1,x2):
     diff = np.subtract(x1, x2)
     dist = np.sum(np.square(diff))
+    dist=1-dist
     return dist
 
 def get_feature_dict(test_list, features):
@@ -95,13 +109,13 @@ def get_feature_dict(test_list, features):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='test for ccf dataset')
     parser.add_argument("--csv",default="/data2/hbchen/ccf/submission_template.csv", help="address for the test csv")
-    parser.add_argument("--tocsv",default="/data2/hbchen/ccf/results/submission_101_tta.csv", help="csv result")
+    parser.add_argument("--tocsv",default="/data2/hbchen/ccf/results/submission_101_dist.csv", help="csv result")
     parser.add_argument("--testdir",default="/data2/hbchen/ccf/Test_Data/", help="test image dir")
-    parser.add_argument("--ckpt",default="/data2/hbchen/ccf/pretrained_model/model_irse101_finetune.pth", help="model checkpoints")
-    parser.add_argument("--save_mat",default='/data2/hbchen/ccf/results/face_embedding_101_tta.mat', help="feature_mat")
+    parser.add_argument("--ckpt",default="/data2/hbchen/ccf/workspace_ir_se101_finetune_dist/models/model_2019-10-14-07-50_accuracy:0.8408571428571427_step:294294_None.pth", help="model checkpoints")
+    parser.add_argument("--save_mat",default='/data2/hbchen/ccf/results/face_embedding_101_dist.mat', help="feature_mat")
     parser.add_argument("-tta", "--tta", help="whether test time augmentation",action="store_true")
-    parser.add_argument("-b", "--batch_size", default =100,type=int,help="batch_size")
-    parser.add_argument("-ws", "--workspace", default ='work_space_multimodel',type=str)
+    parser.add_argument("-b", "--batch_size", default =200,type=int,help="batch_size")
+    parser.add_argument("-ws", "--workspace", default ='work_space_101',type=str)
     parser.add_argument("-s", "--struct", help="backbone struct", default='ir_se_101', type=str)
     args = parser.parse_args()
 
@@ -146,7 +160,9 @@ if __name__ == '__main__':
         #x2 = np.concatenate((face_features[b][0],face_features_ccf[b][0]))
         # score = '%.5f' % (0.5 + 0.5 * (cosin_metric(face_features[a][0], face_features[b][0])))
         #score = '%.5f' % cosin_metric(x1,x2)
-        score = '%.2f' % cosin_metric(face_features[a][0], face_features[b][0])
+        
+        #score = '%.4f' % cosin_metric(face_features[a][0], face_features[b][0])
+        score = '%.4f' % dist(face_features[a][0], face_features[b][0])
         sub.write(score + '\n')
         pbar.update(1)
 

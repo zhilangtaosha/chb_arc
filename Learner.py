@@ -2,6 +2,7 @@ from data.data_pipe import de_preprocess, get_train_loader, get_val_data
 from model import Backbone, Arcface, MobileFaceNet, Am_softmax, l2_norm
 from verifacation import evaluate
 import torch
+import torch.nn.functional as F
 from torch import optim
 import numpy as np
 from tqdm import tqdm
@@ -30,6 +31,7 @@ def requires_grad(model, flag=True):
 class face_learner(object):
     def __init__(self, conf, inference=False):
         print(conf)
+        self.lr=conf.lr
         if conf.use_mobilfacenet:
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
@@ -121,10 +123,12 @@ class face_learner(object):
         if optimizer is not None:
             self.optimizer.load_state_dict(torch.load(optimizer))
 
-    def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
+    def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor,tpr_val):
         self.writer.add_scalar('{}_accuracy'.format(db_name), accuracy, self.step)
         self.writer.add_scalar('{}_best_threshold'.format(db_name), best_threshold, self.step)
         self.writer.add_image('{}_roc_curve'.format(db_name), roc_curve_tensor, self.step)
+        
+        self.writer.add_scalar('{}_tpr@0.001'.format(db_name), tpr_val, self.step)
 #         self.writer.add_scalar('{}_val:true accept ratio'.format(db_name), val, self.step)
 #         self.writer.add_scalar('{}_val_std'.format(db_name), val_std, self.step)
 #         self.writer.add_scalar('{}_far:False Acceptance Ratio'.format(db_name), far, self.step)
@@ -152,10 +156,15 @@ class face_learner(object):
                 else:
                     embeddings[idx:] = self.model(batch.to(conf.device)).cpu()
         tpr, fpr, accuracy, best_thresholds = evaluate(embeddings, issame, nrof_folds)
+        try:
+            tpr_val = tpr[np.less(fpr,0.0012)&np.greater(fpr,0.0008)][0]
+            
+        except:
+            tpr_val = 0
         buf = gen_plot(fpr, tpr)
         roc_curve = Image.open(buf)
         roc_curve_tensor = trans.ToTensor()(roc_curve)
-        return accuracy.mean(), best_thresholds.mean(), roc_curve_tensor
+        return accuracy.mean(), best_thresholds.mean(), roc_curve_tensor,tpr_val
     
     def find_lr(self,
                 conf,
@@ -218,27 +227,53 @@ class face_learner(object):
                 plt.plot(log_lrs[10:-5], losses[10:-5])
                 return log_lrs, losses    
 
-    def train(self, conf, epochs,model,head,head_race):
+    def train(self, conf, epochs):
         self.model = self.model.to(conf.device)
+        self.head = self.head.to(conf.device)
+        self.head_race = self.head_race.to(conf.device)
         self.model.train()
         self.head.train()
         self.head_race.train()
-        running_loss = 0.      
-        requires_grad(self.head,head)
-        requires_grad(self.head_race,head_race)
-        requires_grad(self.model,model)      
+        running_loss = 0.     
         for e in range(epochs):
+                
+        
             print('epoch {} started'.format(e))
             
-            if e == self.milestones[0]:
+            if e == 8:#5 #train hear_race
+                #self.init_lr()
+                conf.loss0 = False
+                conf.loss1 = True
+                conf.loss2 = True
+                conf.model = False
+                conf.head = False
+                conf.head_race = True
+                print(conf)
+            if e == 16:#10:
+                #self.init_lr()
                 self.schedule_lr()
-            if e == self.milestones[1]:
+                conf.loss0 = True
+                conf.loss1 = True
+                conf.loss2 = True
+                conf.model = True
+                conf.head = True
+                conf.head_race = True
+                print(conf)
+            if e == 28:#22
+                self.schedule_lr()
+            if e == 32:
                 self.schedule_lr()      
-            if e == self.milestones[2]:
-                self.schedule_lr()                                 
+            if e == 35:
+                self.schedule_lr()      
+            
+            requires_grad(self.head,conf.head)
+            requires_grad(self.head_race,conf.head_race)
+            requires_grad(self.model,conf.model)                            
             for imgs, labels  in tqdm(iter(self.loader)):
                 imgs = imgs.to(conf.device)
+                labels = labels.to(conf.device)
                 labels_race = torch.zeros_like(labels)
+                
                 race0_index = labels.lt(sum(conf.race_num[:1]))
                 race1_index = labels.lt(sum(conf.race_num[:2])) & labels.ge(sum(conf.race_num[:1]))
                 race2_index = labels.lt(sum(conf.race_num[:3])) & labels.ge(sum(conf.race_num[:2]))
@@ -248,25 +283,37 @@ class face_learner(object):
                 labels_race[race2_index] = 2
                 labels_race[race3_index] = 3
 
-                labels = labels.to(conf.device)
-                labels_race = labels_race.to(conf.device)
+                
+                
                 self.optimizer.zero_grad()
                 embeddings = self.model(imgs)
                 thetas ,w = self.head(embeddings, labels)
                 thetas_race ,w_race = self.head_race(embeddings, labels_race)
-                
+                loss = 0
                 loss0 = conf.ce_loss(thetas, labels) 
                 loss1 = conf.ce_loss(thetas_race, labels_race)
-                loss2 = torch.mm(w_race.t(),w)
+                loss2 = torch.mm(w_race.t(),w).to(conf.device)
                 
-                target =  torch.zeros_like(loss2)
+                target =  torch.zeros_like(loss2).to(conf.device)
                 
                 target[0][:sum(conf.race_num[:1])] = 1
                 target[1][sum(conf.race_num[:1]):sum(conf.race_num[:2])] = 1
                 target[2][sum(conf.race_num[:2]):sum(conf.race_num[:3])] = 1
                 target[3][sum(conf.race_num[:3]):] = 1
-                loss2 = torch.nn.functional.mse_loss(loss2 , target)
-                loss = loss0 + loss1 + loss2
+                
+                weight = torch.zeros_like(loss2).to(conf.device)
+                for i in range(4):
+                    weight[i,:] = sum(conf.race_num)/conf.race_num[i] 
+                #loss2 = torch.nn.functional.mse_loss(loss2 , target)
+                
+                loss2 = F.binary_cross_entropy(torch.sigmoid(loss2),target,weight)
+                if conf.loss0 ==True:
+                    loss += 2*loss0
+                if conf.loss1 ==True:
+                    loss += loss1
+                if conf.loss2 ==True:
+                    loss += loss2
+                #loss = loss0 + loss1 + loss2
                 loss.backward()
                 running_loss += loss.item()
                 self.optimizer.step()
@@ -278,12 +325,12 @@ class face_learner(object):
                 
                 if self.step % self.evaluate_every == 0 and self.step != 0:
                     accuracy=None
-                    accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.agedb_30, self.agedb_30_issame)
-                    self.board_val('agedb_30', accuracy, best_threshold, roc_curve_tensor)
-                    accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.lfw, self.lfw_issame)
-                    self.board_val('lfw', accuracy, best_threshold, roc_curve_tensor)
-                    accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.cfp_fp, self.cfp_fp_issame)
-                    self.board_val('cfp_fp', accuracy, best_threshold, roc_curve_tensor)
+                    accuracy, best_threshold, roc_curve_tensor ,tpr_val= self.evaluate(conf, self.agedb_30, self.agedb_30_issame)
+                    self.board_val('agedb_30', accuracy, best_threshold, roc_curve_tensor,tpr_val)
+                    accuracy, best_threshold, roc_curve_tensor,tpr_val = self.evaluate(conf, self.lfw, self.lfw_issame)
+                    self.board_val('lfw', accuracy, best_threshold, roc_curve_tensor,tpr_val)
+                    accuracy, best_threshold, roc_curve_tensor,tpr_val = self.evaluate(conf, self.cfp_fp, self.cfp_fp_issame)
+                    self.board_val('cfp_fp', accuracy, best_threshold, roc_curve_tensor,tpr_val)
                     self.model.train()
                     
                 if self.step % self.save_every == 0 and self.step != 0:
@@ -297,10 +344,19 @@ class face_learner(object):
         for params in self.optimizer.param_groups:                 
             params['lr'] /= 10
         print(self.optimizer)
+        
+    def init_lr(self):
+        for params in self.optimizer.param_groups:
+            params['lr'] = self.lr
+        print(self.optimizer)
+        
+        
     def schedule_lr_add(self):
         for params in self.optimizer.param_groups:                 
             params['lr'] *= 10
         print(self.optimizer)
+        
+        
     def infer(self, conf, faces, target_embs, tta=False):
         '''
         faces : list of PIL Image
