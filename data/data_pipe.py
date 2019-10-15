@@ -26,8 +26,10 @@ def get_train_dataset(imgs_folder):
     train_transform = trans.Compose([
         trans.Resize((112,112)),
         trans.RandomHorizontalFlip(),
+        trans.CenterCrop((112,112)),
         trans.ToTensor(),
-        trans.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        #trans.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        trans.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
     ds = ImageFolder(imgs_folder, train_transform)
     class_num = ds[-1][1] + 1

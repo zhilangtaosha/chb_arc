@@ -324,6 +324,8 @@ class MobileNet(nn.Module):
         return x
 
 
+
+
 class ArcMarginModel(nn.Module):
     def __init__(self, embedding_size=512, classnum=51332,s=64,m=0.5,easy_margin=False):
         super(ArcMarginModel, self).__init__()

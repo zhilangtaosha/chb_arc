@@ -63,16 +63,16 @@ if __name__ == '__main__':
     conf.batch_size = args.batch_size
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
-    conf.model = False
-    conf.head = True
-    conf.head_race = False
-    conf.loss0=True#loss of head
+    conf.model = False #想把model freeze固定住的时候设置为false
+    conf.head = True  #人脸ID embedding
+    conf.head_race = False  #人种ID embedding
+    conf.loss0=True#loss of head  设置为True时候将计算该loss
     conf.loss1=False#loss of race head
     conf.loss2=False#loss of multi head
-    conf.pretrained = args.pretrained
+    conf.pretrained = args.pretrained#此处加载model预训练模型的地址
     conf.head_race_pretrained = None
     conf.head_pretrained = None
-    conf.optimizer = None
+    conf.optimizer = None#optimizer的地址
     check_save_path(conf)
     
     write_conf(conf, conf.work_path)
