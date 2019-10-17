@@ -29,7 +29,7 @@ config.py保存相关超参数，可在文件中修改
 训练方法：
 python train_ccf.py -lr learning rate -b batch_size --pretrained address of pretrained model --workspace workspace dir --struct ir_se_101 or ir_se_50
 
-通过对config.model\config.head 设置为True和False，分别代表固定住对应的模型
+通过对config.model\config.head 设置为True和False，False代表固定住对应的模型
 
 通过config.loss0\config.loss1\config.loss2 设置为True和False，分别代表训练时候计算该loss
 
